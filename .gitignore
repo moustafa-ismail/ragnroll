@@ -1,4 +1,5 @@
 .env
 .pdf
+secrets.toml
 *.pyc
 __pycache__/

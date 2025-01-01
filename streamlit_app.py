@@ -1,6 +1,8 @@
 import streamlit as st
+from snowflake.snowpark.session import Session
 from snowflake.snowpark.context import get_active_session
 from snowflake.core import Root
+import snowflake.connector
 import pandas as pd
 import json
 
@@ -8,8 +10,8 @@ import json
 # Configuration
 NUM_CHUNKS = 3  # Number of chunks to retrieve
 SLIDE_WINDOW = 7  # Number of last conversations to remember
-CORTEX_SEARCH_DATABASE = "CC_QUICKSTART_CORTEX_SEARCH_DOCS_3"
-CORTEX_SEARCH_SCHEMA = "DATA"
+CORTEX_SEARCH_DATABASE = st.secrets["snowflake"]["database"]
+CORTEX_SEARCH_SCHEMA = st.secrets["snowflake"]["schema"]
 CORTEX_SEARCH_SERVICE = "CC_SEARCH_SERVICE_CS"
 COLUMNS = [
     "chunk",
@@ -17,8 +19,20 @@ COLUMNS = [
     "category"
 ]
 
+# Snowflake Connection and Session
+connection_params = {
+    "account": st.secrets["snowflake"]["account"],
+    "user": st.secrets["snowflake"]["user"],
+    "password": st.secrets["snowflake"]["password"],
+    "warehouse": st.secrets["snowflake"]["warehouse"],
+    "database": st.secrets["snowflake"]["database"],
+    "schema": st.secrets["snowflake"]["schema"],
+    "role": st.secrets["snowflake"]["role"],
+}
+
+
 # Get active Snowflake session
-session = get_active_session()
+session = Session.builder.configs(connection_params).create()
 root = Root(session)
 svc = root.databases[CORTEX_SEARCH_DATABASE].schemas[CORTEX_SEARCH_SCHEMA].cortex_search_services[CORTEX_SEARCH_SERVICE]
 
