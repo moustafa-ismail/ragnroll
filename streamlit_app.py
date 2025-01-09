@@ -6,6 +6,11 @@ import snowflake.connector
 import pandas as pd
 import json
 from trulens.apps.custom import instrument
+from trulens.core import TruSession
+from trulens.apps.custom import TruCustomApp
+from feedback_functions import f_context_relevance
+from trulens.dashboard import streamlit as trulens_st
+from trulens.dashboard.Leaderboard import render_leaderboard
 
 
 # Configuration
@@ -31,6 +36,8 @@ connection_params = {
     "role": st.secrets["snowflake"]["role"],
 }
 
+# Trulens session
+tru_session = TruSession()
 
 # Get active Snowflake session
 session = Session.builder.configs(connection_params).create()
@@ -78,75 +85,88 @@ def summarize_question_with_history(chat_history, question):
     summary = df_response[0].RESPONSE
     return summary.replace("'", "")
 
-@instrument
-def get_similar_chunks_search_service(query, category):
-    """Search for similar chunks based on query and category."""
-    if category == "ALL":
-        response = svc.search(query, COLUMNS, limit=NUM_CHUNKS)
-    else:
-        filter_obj = {"@eq": {"category": category}}
-        response = svc.search(query, COLUMNS, filter=filter_obj, limit=NUM_CHUNKS)
-    st.sidebar.json(response.json())
-    return response.json()
 
-def create_prompt(query, category):
-    """Create a prompt for the LLM with context from search results and chat history."""
-    if st.session_state.use_chat_history:
-        chat_history = get_chat_history()
-        if chat_history:
-            question_summary = summarize_question_with_history(chat_history, query)
-            prompt_context = get_similar_chunks_search_service(question_summary, category)
+class RAG:
+    @instrument
+    def get_similar_chunks_search_service(self, query, category):
+        """Search for similar chunks based on query and category."""
+        if category == "ALL":
+            response = svc.search(query, COLUMNS, limit=NUM_CHUNKS)
         else:
-            prompt_context = get_similar_chunks_search_service(query, category)
-    else:
-        prompt_context = get_similar_chunks_search_service(query, category)
-        chat_history = ""
+            filter_obj = {"@eq": {"category": category}}
+            response = svc.search(query, COLUMNS, filter=filter_obj, limit=NUM_CHUNKS)
+        st.sidebar.json(response.json())
+        return response.json()
 
-    prompt = f"""
-    I am Ali, a friendly and witty chef who specializes in {category} recipes! I love helping people cook and finding the perfect recipes from our collection.
+    @instrument
+    def complete_query(self, query, category):
+        """Complete the query using Snowflake Cortex with Mistral model."""
+        prompt, relative_paths = self.create_prompt(query, category)
+        cmd = """
+            select snowflake.cortex.complete(?, ?) as response
+        """
+        df_response = session.sql(cmd, params=['mistral-large', prompt]).collect()
+        return df_response, relative_paths
+    
+    def create_prompt(self, query, category):
+        """Create a prompt for the LLM with context from search results and chat history."""
+        if st.session_state.use_chat_history:
+            chat_history = get_chat_history()
+            if chat_history:
+                question_summary = summarize_question_with_history(chat_history, query)
+                prompt_context = self.get_similar_chunks_search_service(question_summary, category)
+            else:
+                prompt_context = self.get_similar_chunks_search_service(query, category)
+        else:
+            prompt_context = self.get_similar_chunks_search_service(query, category)
+            chat_history = ""
 
-    Conversation Flow:
-    1. When suggesting recipes:
-        - Prioritize recipes that makes use of all ingredients
-        - First list all matching recipes as numbered options
-        - Ask which recipe they'd like to know more about
-    2. When user selects a recipe, provide full details in this format:
-        Recipe Name:
-        Quantities (for 1 person):
-        Cooking Time:
-        Steps:
-        Cuisine:
-        General Diet Type:
+        prompt = f"""
+        I am Ali, a friendly and witty chef who specializes in {category} recipes! I love helping people cook and finding the perfect recipes from our collection.
 
-    <chat_history>
-    {chat_history}
-    </chat_history>
+        Conversation Flow:
+        1. When suggesting recipes:
+            - Prioritize recipes that makes use of all ingredients
+            - First list all matching recipes as numbered options
+            - Ask which recipe they'd like to know more about
+        2. When user selects a recipe, provide full details in this format:
+            Recipe Name:
+            Quantities (for 1 person):
+            Cooking Time:
+            Steps:
+            Cuisine:
+            General Diet Type:
 
-    <context>
-    {prompt_context}
-    </context>
+        <chat_history>
+        {chat_history}
+        </chat_history>
 
-    User Query: {query}
-    Current Category: {category}
+        <context>
+        {prompt_context}
+        </context>
 
-    Response (as Ali, friendly and category-aware):
-    """
+        User Query: {query}
+        Current Category: {category}
 
-    json_data = json.loads(prompt_context)
-    relative_paths = set(item.get('relative_path', '') for item in json_data['results'])
-    return prompt, relative_paths
+        Response (as Ali, friendly and category-aware):
+        """
 
-@instrument
-def complete_query(query, category):
-    """Complete the query using Snowflake Cortex with Mistral model."""
-    prompt, relative_paths = create_prompt(query, category)
-    cmd = """
-        select snowflake.cortex.complete(?, ?) as response
-    """
-    df_response = session.sql(cmd, params=['mistral-large', prompt]).collect()
-    return df_response, relative_paths
+        json_data = json.loads(prompt_context)
+        relative_paths = set(item.get('relative_path', '') for item in json_data['results'])
+        return prompt, relative_paths
 
-@instrument
+
+rag = RAG()
+
+
+tru_rag = TruCustomApp(
+    rag,
+    app_name="RAG",
+    app_version="base",
+    feedbacks=[f_context_relevance],
+)
+
+
 def main():
     """Main Streamlit application function."""
     st.title(":fork_and_knife: Food Recipe Assistant with History")
@@ -183,7 +203,9 @@ def main():
 
         # Generate response
         current_category = st.session_state.food_category
-        response, relative_paths = complete_query(query, current_category)
+        
+        with tru_rag as recording:
+            response, relative_paths = rag.complete_query(query, current_category)
         res_text = response[0].RESPONSE
 
         # Display assistant response
@@ -200,6 +222,10 @@ def main():
                     url_link = df_url_link._get_value(0, 'URL_LINK')
                     display_url = f"Recipe: [{path}]({url_link})"
                     st.sidebar.markdown(display_url)
+
+    render_leaderboard()
+
+
 
 if __name__ == "__main__":
     main()
