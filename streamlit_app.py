@@ -5,6 +5,7 @@ from snowflake.core import Root
 import snowflake.connector
 import pandas as pd
 import json
+from trulens.apps.custom import instrument
 
 
 # Configuration
@@ -77,6 +78,7 @@ def summarize_question_with_history(chat_history, question):
     summary = df_response[0].RESPONSE
     return summary.replace("'", "")
 
+@instrument
 def get_similar_chunks_search_service(query, category):
     """Search for similar chunks based on query and category."""
     if category == "ALL":
@@ -134,6 +136,7 @@ def create_prompt(query, category):
     relative_paths = set(item.get('relative_path', '') for item in json_data['results'])
     return prompt, relative_paths
 
+@instrument
 def complete_query(query, category):
     """Complete the query using Snowflake Cortex with Mistral model."""
     prompt, relative_paths = create_prompt(query, category)
@@ -143,6 +146,7 @@ def complete_query(query, category):
     df_response = session.sql(cmd, params=['mistral-large', prompt]).collect()
     return df_response, relative_paths
 
+@instrument
 def main():
     """Main Streamlit application function."""
     st.title(":fork_and_knife: Food Recipe Assistant with History")
