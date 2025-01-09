@@ -5,6 +5,7 @@ from snowflake.core import Root
 import snowflake.connector
 import pandas as pd
 import json
+from trulens_eval import Tru, instrument
 
 
 # Configuration
@@ -59,6 +60,7 @@ def get_chat_history():
         chat_history.append(st.session_state.messages[i])
     return chat_history
 
+@instrument
 def summarize_question_with_history(chat_history, question):
     """Summarize the chat history and current question for better context."""
     prompt = f"""
@@ -77,6 +79,7 @@ def summarize_question_with_history(chat_history, question):
     summary = df_response[0].RESPONSE
     return summary.replace("'", "")
 
+@instrument
 def get_similar_chunks_search_service(query, category):
     """Search for similar chunks based on query and category."""
     if category == "ALL":
@@ -134,6 +137,7 @@ def create_prompt(query, category):
     relative_paths = set(item.get('relative_path', '') for item in json_data['results'])
     return prompt, relative_paths
 
+@instrument
 def complete_query(query, category):
     """Complete the query using Snowflake Cortex with Mistral model."""
     prompt, relative_paths = create_prompt(query, category)
@@ -146,6 +150,12 @@ def complete_query(query, category):
 def main():
     """Main Streamlit application function."""
     st.title(":fork_and_knife: Food Recipe Assistant with History")
+
+    # Initialize Trulens evaluation app
+    tru = Tru()
+
+    # Register instrumented functions
+    tru.add_app(name="Food Recipe Assistant")
 
     # Track previous category
     if "previous_category" not in st.session_state:
