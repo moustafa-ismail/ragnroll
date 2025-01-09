@@ -240,7 +240,7 @@ def main():
                     display_url = f"Recipe: [{path}]({url_link})"
                     st.sidebar.markdown(display_url)
 
-    render_leaderboard()
+    render_leaderboard(tru_rag)
 
 
 
