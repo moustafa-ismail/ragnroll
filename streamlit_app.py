@@ -8,7 +8,7 @@ import json
 from trulens.apps.custom import instrument
 from trulens.core import TruSession
 from trulens.apps.custom import TruCustomApp
-from feedback_functions import f_context_relevance
+# from feedback_functions import f_context_relevance
 from trulens.dashboard import streamlit as trulens_st
 from trulens.dashboard.Leaderboard import render_leaderboard
 import numpy as np
