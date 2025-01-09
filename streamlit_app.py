@@ -17,15 +17,8 @@ from trulens.core import Select
 from trulens.providers.cortex import Cortex
 
 
-snowpark_session = get_active_session()
 
-provider = Cortex(snowpark_session.connection, "mistral-large2")
 
-f_context_relevance = (
-    Feedback(provider.context_relevance, name="Context Relevance")
-    .on_input_output()
-    .aggregate(np.mean)
-)
 
 # Configuration
 NUM_CHUNKS = 3  # Number of chunks to retrieve
@@ -57,6 +50,16 @@ tru_session = TruSession()
 session = Session.builder.configs(connection_params).create()
 root = Root(session)
 svc = root.databases[CORTEX_SEARCH_DATABASE].schemas[CORTEX_SEARCH_SCHEMA].cortex_search_services[CORTEX_SEARCH_SERVICE]
+
+
+provider = Cortex(session.connection, "mistral-large2")
+
+f_context_relevance = (
+    Feedback(provider.context_relevance, name="Context Relevance")
+    .on_input_output()
+    .aggregate(np.mean)
+)
+
 
 def config_options():
     """Configure sidebar options for the application."""
