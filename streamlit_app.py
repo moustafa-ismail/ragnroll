@@ -7,6 +7,11 @@ import pandas as pd
 import json
 from trulens_eval import Tru, instrument
 from trulens_eval import instrument
+import nltk
+
+
+nltk.data.path.append("/tmp/nltk_data")  # Use a writable directory
+
 
 # Configuration
 NUM_CHUNKS = 3  # Number of chunks to retrieve
