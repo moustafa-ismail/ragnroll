@@ -1,4 +1,7 @@
 streamlit
 snowflake-snowpark-python
 snowflake.core
-trulens-eval==1.2.1
+trulens-connectors-snowflake
+trulens-core
+trulens-providers-cortex
+trulens-dashboard
