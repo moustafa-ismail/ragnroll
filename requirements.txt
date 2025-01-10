@@ -2,3 +2,4 @@ streamlit
 snowflake-snowpark-python
 snowflake.core
 trulens-eval==0.14.0
+pydantic<2.0
