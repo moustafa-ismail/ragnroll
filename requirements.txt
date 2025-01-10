@@ -1,4 +1,4 @@
 streamlit
 snowflake-snowpark-python
 snowflake.core
-trulens
+trulens-eval==0.14.0

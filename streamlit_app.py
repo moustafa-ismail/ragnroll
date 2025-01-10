@@ -6,7 +6,7 @@ import snowflake.connector
 import pandas as pd
 import json
 from trulens_eval import Tru, instrument
-
+from trulens_eval import instrument
 
 # Configuration
 NUM_CHUNKS = 3  # Number of chunks to retrieve
