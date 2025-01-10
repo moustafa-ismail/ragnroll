@@ -4,5 +4,4 @@ snowflake.core
 trulens-connectors-snowflake
 trulens-core
 trulens-providers-cortex
-trulens-dashboard
-nltk
+
