@@ -5,13 +5,12 @@ from snowflake.core import Root
 import snowflake.connector
 import pandas as pd
 import json
-from trulens_eval import Tru, instrument
-from trulens_eval import instrument
-import nltk
-
-
-nltk.data.path.append("/tmp/nltk_data")  # Use a writable directory
-
+import numpy as np
+from trulens.apps.custom import instrument
+from trulens.apps.custom import TruCustomApp
+from trulens.providers.cortex.provider import Cortex
+from trulens.core import Feedback
+from trulens.core import Select
 
 # Configuration
 NUM_CHUNKS = 3  # Number of chunks to retrieve
@@ -65,7 +64,6 @@ def get_chat_history():
         chat_history.append(st.session_state.messages[i])
     return chat_history
 
-@instrument
 def summarize_question_with_history(chat_history, question):
     """Summarize the chat history and current question for better context."""
     prompt = f"""
@@ -84,28 +82,44 @@ def summarize_question_with_history(chat_history, question):
     summary = df_response[0].RESPONSE
     return summary.replace("'", "")
 
-@instrument
-def get_similar_chunks_search_service(query, category):
-    """Search for similar chunks based on query and category."""
-    if category == "ALL":
-        response = svc.search(query, COLUMNS, limit=NUM_CHUNKS)
-    else:
-        filter_obj = {"@eq": {"category": category}}
-        response = svc.search(query, COLUMNS, filter=filter_obj, limit=NUM_CHUNKS)
-    st.sidebar.json(response.json())
-    return response.json()
+class RAG_class:
+    @instrument
+    def get_similar_chunks_search_service(query, category):
+        """Search for similar chunks based on query and category."""
+        if category == "ALL":
+            response = svc.search(query, COLUMNS, limit=NUM_CHUNKS)
+        else:
+            filter_obj = {"@eq": {"category": category}}
+            response = svc.search(query, COLUMNS, filter=filter_obj, limit=NUM_CHUNKS)
+        st.sidebar.json(response.json())
+        return response.json()
+
+
+    @instrument
+    def complete_query(query, category):
+        """Complete the query using Snowflake Cortex with Mistral model."""
+        prompt, relative_paths = create_prompt(query, category)
+        cmd = """
+            select snowflake.cortex.complete(?, ?) as response
+        """
+        df_response = session.sql(cmd, params=['mistral-large', prompt]).collect()
+        return df_response, relative_paths
+
 
 def create_prompt(query, category):
     """Create a prompt for the LLM with context from search results and chat history."""
+    # Initialize class
+    rag=RAG_class()
+
     if st.session_state.use_chat_history:
         chat_history = get_chat_history()
         if chat_history:
             question_summary = summarize_question_with_history(chat_history, query)
-            prompt_context = get_similar_chunks_search_service(question_summary, category)
+            prompt_context = rag.get_similar_chunks_search_service(question_summary, category)
         else:
-            prompt_context = get_similar_chunks_search_service(query, category)
+            prompt_context = rag.get_similar_chunks_search_service(query, category)
     else:
-        prompt_context = get_similar_chunks_search_service(query, category)
+        prompt_context = rag.get_similar_chunks_search_service(query, category)
         chat_history = ""
 
     prompt = f"""
@@ -142,25 +156,29 @@ def create_prompt(query, category):
     relative_paths = set(item.get('relative_path', '') for item in json_data['results'])
     return prompt, relative_paths
 
-@instrument
-def complete_query(query, category):
-    """Complete the query using Snowflake Cortex with Mistral model."""
-    prompt, relative_paths = create_prompt(query, category)
-    cmd = """
-        select snowflake.cortex.complete(?, ?) as response
-    """
-    df_response = session.sql(cmd, params=['mistral-large', prompt]).collect()
-    return df_response, relative_paths
+
 
 def main():
     """Main Streamlit application function."""
     st.title(":fork_and_knife: Food Recipe Assistant with History")
 
-    # Initialize Trulens evaluation app
-    tru = Tru()
+    rag = RAG_class()
 
-    # Register instrumented functions
-    tru.add_app(name="Food Recipe Assistant")
+    # Initialize llm
+    provider = Cortex(session.connection, "mistral-large2")
+
+    # Feedback function
+    f_context_relevance = (
+        Feedback(provider.context_relevance, name="Context Relevance")
+        .on_input_output()
+        .aggregate(np.mean)
+    )
+    tru_recorder = TruCustomApp(
+        rag,
+        app_name = "my_rag",
+        app_version = "base",
+        feedbacks = [f_context_relevance]
+    )
 
     # Track previous category
     if "previous_category" not in st.session_state:
@@ -194,7 +212,11 @@ def main():
 
         # Generate response
         current_category = st.session_state.food_category
-        response, relative_paths = complete_query(query, current_category)
+
+        # Added recording
+        with tru_recorder as recording:
+            response, relative_paths = rag.complete_query(query, current_category)
+            
         res_text = response[0].RESPONSE
 
         # Display assistant response
