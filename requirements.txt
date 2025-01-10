@@ -2,4 +2,3 @@ streamlit
 snowflake-snowpark-python
 snowflake.core
 trulens
-trulens-eval
