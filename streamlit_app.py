@@ -162,12 +162,12 @@ class RAG_class:
                 context_rag, relative_paths = self.retrieve(query=question_summary, category=category)
 
                 # Create prompt with chat history and new context rag with question_summary
-                prompt = self.create_prompt(query=query, category=category, prompt_context=context_rag, chat_history=chat_history)
+                prompt = self.create_prompt(category=category, prompt_context=context_rag, chat_history=chat_history)
 
             else:
                 context_rag, relative_paths = self.retrieve(query=query, category=category)
 
-                prompt = self.create_prompt(query=query, category=category, prompt_context=context_rag)
+                prompt = self.create_prompt(category=category, prompt_context=context_rag)
             
         else:
             context_rag, relative_paths = self.retrieve(query=query, category=category)
