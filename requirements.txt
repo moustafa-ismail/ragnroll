@@ -5,3 +5,4 @@ trulens-connectors-snowflake
 trulens-core
 trulens-providers-cortex
 trulens-eval
+snowflake-ml-python
