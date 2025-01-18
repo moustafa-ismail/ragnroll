@@ -1,6 +1,5 @@
 import streamlit as st
 from snowflake.snowpark.session import Session
-# from snowflake.snowpark.context import get_active_session
 from snowflake.core import Root
 from snowflake.cortex import complete
 import snowflake.connector
@@ -10,8 +9,10 @@ import numpy as np
 from trulens.apps.custom import instrument
 from trulens.apps.custom import TruCustomApp
 from trulens.providers.cortex.provider import Cortex
-from trulens.core import Feedback
-from trulens.core import Select
+from trulens.dashboard import run_dashboard
+import trulens.dashboard.streamlit as trulens_st
+from trulens.core import TruSession
+from feedback import get_feedbacks
 
 # Configuration
 NUM_CHUNKS = 3  # Number of chunks to retrieve
@@ -41,6 +42,9 @@ connection_params = {
 session = Session.builder.configs(connection_params).create()
 root = Root(session)
 svc = root.databases[CORTEX_SEARCH_DATABASE].schemas[CORTEX_SEARCH_SCHEMA].cortex_search_services[CORTEX_SEARCH_SERVICE]
+
+# Initialize trulens session
+tru_session = TruSession()
 
 def config_options():
     """Configure sidebar options for the application."""
@@ -78,10 +82,12 @@ def summarize_question_with_history(chat_history, question):
         {question}
         </question>
     """
-    cmd = "select snowflake.cortex.complete(?, ?) as response"
-    df_response = session.sql(cmd, params=['mistral-large', prompt]).collect()
-    summary = df_response[0].RESPONSE
-    return summary.replace("'", "")
+    # cmd = "select snowflake.cortex.complete(?, ?) as response"
+    # df_response = session.sql(cmd, params=['mistral-large', prompt]).collect()
+    # summary = df_response[0].RESPONSE
+    # summary.replace("'", "")
+    
+    return complete("mistral-large2", prompt=prompt, session=session)
 
 class RAG_class:
 
@@ -147,7 +153,7 @@ class RAG_class:
     def generate_completion(self, query: str, prompt: str, context_rag: list) -> str:
         """Calls mistral-large2 model with the final prompt. Extra input for Trulens monitoring"""
 
-        return complete("mistral-large2", prompt)
+        return complete("mistral-large2", prompt, session=session)
     
 
     @instrument
@@ -181,49 +187,21 @@ class RAG_class:
         return completion, relative_paths
 
 
+myrag = RAG_class()
+
+# Start Trulens recorder
+tru_rag = TruCustomApp(
+    myrag,
+    app_name="rag-new",
+    app_version="base",
+    feedbacks=get_feedbacks(session),
+)
+
 def main():
     """Main Streamlit application function."""
     st.title(":fork_and_knife: Food Recipe Assistant with History")
 
-    rag = RAG_class()
 
-    # Initialize llm
-    provider = Cortex(session, "mistral-large2")
-
-    # Feedback function
-
-    # Define a groundedness feedback function
-    f_groundedness = (
-        Feedback(
-            provider.groundedness_measure_with_cot_reasons, name="Groundedness"
-        )
-        .on(Select.RecordCalls.retrieve.rets.collect())
-        .on_output()
-    )
-    # Question/answer relevance between overall question and answer.
-    f_answer_relevance = (
-        Feedback(provider.relevance_with_cot_reasons, name="Answer Relevance")
-        .on(Select.RecordCalls.retrieve.args.query)
-        .on_output()
-    )
-
-    # Context relevance between question and each context chunk.
-    f_context_relevance = (
-        Feedback(
-            provider.context_relevance_with_cot_reasons, name="Context Relevance"
-        )
-        .on(Select.RecordCalls.retrieve.args.query)
-        .on(Select.RecordCalls.retrieve.rets.collect())
-        .aggregate(np.mean)  # choose a different aggregation method if you wish
-    )
-
-    # Start Trulens recorder
-    tru_rag = TruCustomApp(
-        rag,
-        app_name="rag-implement",
-        app_version="base",
-        feedbacks=[f_groundedness, f_answer_relevance, f_context_relevance],
-    )
 
     # Track previous category
     if "previous_category" not in st.session_state:
@@ -257,11 +235,13 @@ def main():
 
         # Generate response
         current_category = st.session_state.food_category
-        print("*************************",query)
+
         # Added recording
         with tru_rag as recording:
-            response, relative_paths = rag.query(query=query, category=current_category)
+            response, relative_paths = myrag.query(query=query, category=current_category)
         
+        #get record
+        record = recording.get()
 
         # Display assistant response
         with st.chat_message("assistant"):
@@ -277,6 +257,11 @@ def main():
                     url_link = df_url_link._get_value(0, 'URL_LINK')
                     display_url = f"Recipe: [{path}]({url_link})"
                     st.sidebar.markdown(display_url)
+
+        with st.expander("See the trace of this record 👀"):
+            trulens_st.trulens_trace(record=record)
+
+        trulens_st.trulens_feedback(record=record)
 
 if __name__ == "__main__":
     main()
