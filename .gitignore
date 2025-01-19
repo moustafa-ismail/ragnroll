@@ -3,3 +3,4 @@
 secrets.toml
 *.pyc
 __pycache__/
+venv/

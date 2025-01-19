@@ -1,0 +1,41 @@
+Metadata-Version: 2.3
+Name: snowflake.core
+Version: 0.9.0
+Summary: Snowflake Python API for Resource Management
+Author-email: "Snowflake, Inc." <snowflake-python-libraries-dl@snowflake.com>
+License: Apache-2.0
+License-File: LICENSE
+Keywords: Snowflake,analytics,cloud,database,db,warehouse
+Classifier: Development Status :: 4 - Beta
+Classifier: Environment :: Console
+Classifier: Environment :: Other Environment
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Education
+Classifier: Intended Audience :: Information Technology
+Classifier: Intended Audience :: System Administrators
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: SQL
+Classifier: Topic :: Database
+Classifier: Topic :: Scientific/Engineering :: Information Analysis
+Classifier: Topic :: Software Development
+Classifier: Topic :: Software Development :: Libraries
+Classifier: Topic :: Software Development :: Libraries :: Application Frameworks
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: <3.12,>=3.8
+Requires-Dist: atpublic>=4
+Requires-Dist: pydantic>=2
+Requires-Dist: python-dateutil>=2.8.2
+Requires-Dist: requests
+Requires-Dist: snowflake-snowpark-python<2.0.0,>=1.5.0
+Requires-Dist: urllib3
+Description-Content-Type: text/markdown
+
+`snowflake.core` is the subpackage providing Python access to Snowflake entity metadata.
+
+You can use it to interact with Snowflake resources, creating, deleting, modifying them, and more. 
+
+[Developer guide](https://docs.snowflake.com/developer-guide/snowflake-python-api/snowflake-python-overview)
+
+[API reference](https://docs.snowflake.com/developer-guide/snowflake-python-api/reference/latest/index)
