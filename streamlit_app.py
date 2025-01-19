@@ -12,7 +12,11 @@ from trulens.providers.cortex.provider import Cortex
 from trulens.dashboard import run_dashboard
 import trulens.dashboard.streamlit as trulens_st
 from trulens.core import TruSession
-from feedback import get_feedbacks
+# from feedback import get_feedbacks
+from trulens.core import Feedback
+from trulens.core import Select
+from trulens.providers.cortex.provider import Cortex
+import numpy as np
 
 # Configuration
 NUM_CHUNKS = 3  # Number of chunks to retrieve
@@ -45,6 +49,37 @@ svc = root.databases[CORTEX_SEARCH_DATABASE].schemas[CORTEX_SEARCH_SCHEMA].corte
 
 # Initialize trulens session
 tru_session = TruSession()
+
+provider = Cortex(snowpark_session=session, model_engine="mistral-large2")
+# Feedback function
+
+# Define a groundedness feedback function
+f_groundedness = (
+    Feedback(
+        provider.groundedness_measure_with_cot_reasons, name="Groundedness"
+    )
+    .on(Select.RecordCalls.retrieve.rets.collect())
+    .on_output()
+)
+# Question/answer relevance between overall question and answer.
+f_answer_relevance = (
+    Feedback(provider.relevance_with_cot_reasons, name="Answer Relevance")
+    .on(Select.RecordCalls.retrieve.args.query)
+    .on_output()
+)
+
+# Context relevance between question and each context chunk.
+f_context_relevance = (
+    Feedback(
+        provider.context_relevance_with_cot_reasons, name="Context Relevance"
+    )
+    .on(Select.RecordCalls.retrieve.args.query)
+    .on(Select.RecordCalls.retrieve.rets.collect())
+    .aggregate(np.mean)  # choose a different aggregation method if you wish
+)
+
+feedbacks = [f_groundedness, f_answer_relevance, f_context_relevance]
+
 
 def config_options():
     """Configure sidebar options for the application."""
@@ -113,7 +148,7 @@ class RAG_class:
             return retrieved_chunks, relative_paths
 
 
-    def create_prompt(query, category, prompt_context, chat_history=""):
+    def create_prompt(self, query, category, prompt_context, chat_history=""):
         """Create a prompt for the LLM with context from search results and chat history."""
 
         prompt = f"""
@@ -168,16 +203,16 @@ class RAG_class:
                 context_rag, relative_paths = self.retrieve(query=question_summary, category=category)
 
                 # Create prompt with chat history and new context rag with question_summary
-                prompt = self.create_prompt(category=category, prompt_context=context_rag, chat_history=chat_history)
+                prompt = self.create_prompt(query=query, category=category, prompt_context=context_rag, chat_history=chat_history)
 
             else:
                 context_rag, relative_paths = self.retrieve(query=query, category=category)
 
-                prompt = self.create_prompt(category=category, prompt_context=context_rag)
+                prompt = self.create_prompt(query=query, category=category, prompt_context=context_rag)
             
         else:
             context_rag, relative_paths = self.retrieve(query=query, category=category)
-            prompt = self.create_prompt(category=category, prompt_context=context_rag)
+            prompt = self.create_prompt(query=query, category=category, prompt_context=context_rag)
 
         # Call the model
         completion = self.generate_completion(
@@ -194,7 +229,7 @@ tru_rag = TruCustomApp(
     myrag,
     app_name="rag-new",
     app_version="base",
-    feedbacks=get_feedbacks(session),
+    feedbacks=feedbacks,
 )
 
 def main():
