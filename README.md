@@ -62,6 +62,43 @@ This project implements a Recipe Retrieval-Augmented Generation (RAG) system pow
 
 ---
 
+## Deployment to Streamlit Cloud
+
+### Steps to Deploy
+
+1. **Prepare the Repository:**
+   - Ensure all required files (`streamlit_app.py`, `requirements.txt`, etc.) are committed to the repository.
+   - Add a `.streamlit/secrets.toml` file with your database credentials (these will be securely stored on Streamlit Cloud).
+
+2. **Push to GitHub:**
+   - Push your code to a GitHub repository.
+
+3. **Set Up on Streamlit Cloud:**
+   - Log in to [Streamlit Cloud](https://streamlit.io/cloud).
+   - Click on **New App** and connect your GitHub repository.
+   - Select the branch and the `streamlit_app.py` file as the entry point.
+
+4. **Add Secrets:**
+   - Go to the app's settings on Streamlit Cloud.
+   - Add your database credentials in the **Secrets** section. Use the following format:
+     ```toml
+     [snowflake]
+     account = "<your-account>"
+     user = "<your-user>"
+     password = "<your-password>"
+     warehouse = "<your-warehouse>"
+     database = "<your-database>"
+     schema = "<your-schema>"
+     role = "<your-role>"  # Optional
+     ```
+
+5. **Deploy:**
+   - Click **Deploy** and wait for the app to launch.
+
+6. **Test the App:**
+   - Open the deployed app URL and test the features to ensure everything works correctly.
+
+---
 ## File Details
 
 ### Main Scripts
