@@ -17,6 +17,48 @@ from trulens.core import Feedback
 from trulens.core import Select
 from trulens.providers.cortex.provider import Cortex
 import numpy as np
+import requests
+import logging
+from streamlit_lottie import st_lottie
+from typing import List, Tuple, Dict, Optional
+
+
+# Set page configuration
+st.set_page_config(page_title="Food Recipe Assistant", page_icon="🍴", layout="wide")
+# Function to load a Lottie animation from a URL with retry logic
+def load_lottie_from_url(url: str, max_retries: int = 5, timeout: int = 15) -> Optional[dict]:
+    """
+    Load a Lottie animation from a URL with retry logic.
+    Parameters:
+        url (str): URL to fetch the Lottie animation from.
+        max_retries (int): Maximum number of retry attempts.
+        timeout (int): Timeout for each request in seconds.
+    Returns:
+        dict: Lottie animation JSON if successfully loaded, otherwise None.
+    """
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, timeout=timeout)
+            if response.status_code == 200:
+                logging.info("Successfully loaded animation from URL.")
+                return response.json()
+            else:
+                logging.warning(f"Attempt {attempt + 1}: Failed to fetch animation. "
+                                f"Status code: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            logging.warning(f"Attempt {attempt + 1}: Error fetching animation from URL: {e}")
+    
+    logging.error(f"Failed to load animation from URL after {max_retries} attempts.")
+    return None
+
+# Lottie Animation URL
+LOTTIE_URL = "https://lottie.host/e45492cc-f42c-42f0-be45-17d8ea90c568/twGE6H6R0V.json"
+DEFAULT_LOTTIE_URL = "https://path-to-your-default-animation.json"
+
+# Load Lottie animation from the URL or fallback
+lottie_cooking = load_lottie_from_url(LOTTIE_URL) or load_lottie_from_url(DEFAULT_LOTTIE_URL)
+
+
 
 # Configuration
 NUM_CHUNKS = 3  # Number of chunks to retrieve
@@ -80,24 +122,43 @@ f_context_relevance = (
 
 feedbacks = [f_groundedness, f_answer_relevance, f_context_relevance]
 
+# Validate Secrets
+def validate_secrets() -> bool:
+    required_keys = ["account", "user", "password", "warehouse", "database", "schema", "role"]
+    missing_keys = [k for k in required_keys if k not in st.secrets["snowflake"]]
+    if missing_keys:
+        st.error(f"Missing required secrets: {missing_keys}")
+        return False
+    return True
 
-def config_options():
+def configure_sidebar():
     """Configure sidebar options for the application."""
-    categories = ['Snacks', 'Juices', 'MainCourse', 'Salads', 'Desserts', 'Appetizers']
+    categories = ['Snacks', 'Juices', 'MainCourse', 'Salads', 'Desserts', 'Appetizers', "ALL"]
     st.sidebar.selectbox('Select Food Category', categories, key="food_category")
     st.sidebar.checkbox('Remember chat history?', key="use_chat_history", value=True)
     st.sidebar.button("Start Over", key="clear_conversation", on_click=init_messages)
 
+    if "related_paths" in st.session_state:
+        with st.sidebar.expander("Related Recipes"):
+            for path in st.session_state.related_paths:
+                st.sidebar.markdown(path)
+
+# Initialize Chat Messages
 def init_messages():
     """Initialize chat history."""
     if st.session_state.get("clear_conversation") or "messages" not in st.session_state:
         st.session_state.messages = []
         # Add Ali's introduction message
-        welcome_message = "Hi! I'm Ali, your personal chef friend! Tell me what ingredients you have, and I'll help you whip up something delicious! 👨‍🍳"
+        welcome_message = (
+            "Hi! I'm Ali, your personal chef friend!\n"
+            "Tell me what ingredients you have, and I'll help you whip up something delicious! 👨‍🍳"
+        )
         st.session_state.messages.append({"role": "assistant", "content": welcome_message})
 
 def get_chat_history():
     """Retrieve recent messages from the chat history."""
+    if "messages" not in st.session_state:
+        return []
     chat_history = []
     start_index = max(0, len(st.session_state.messages) - SLIDE_WINDOW)
     for i in range(start_index, len(st.session_state.messages) - 1):
@@ -234,15 +295,30 @@ tru_rag = TruCustomApp(
 
 def main():
     """Main Streamlit application function."""
+
+    if "show_animation" not in st.session_state:
+        st.session_state.show_animation = True  # Show animation on the first load
+    if st.session_state.show_animation and lottie_cooking:
+        st_lottie(lottie_cooking, height=300, width=300, key="page_load_animation")
+        st.write("Loading your personal chef assistant...")  # Temporary loading message
+        # Simulate a delay for the setup process
+        import time
+        time.sleep(5)  # Display animation for 5 seconds
+        st.session_state.show_animation = False  # Hide animation after setup
+        st.rerun()  # Reload the app to show the main content
+
+    # Main title
     st.title(":fork_and_knife: Food Recipe Assistant with History")
 
-
+    
+    if not validate_secrets():
+        st.stop()
 
     # Track previous category
     if "previous_category" not in st.session_state:
         st.session_state.previous_category = None
 
-    config_options()
+    configure_sidebar()
     init_messages()
 
     # Display chat messages from history on app rerun
