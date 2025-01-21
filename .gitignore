@@ -4,3 +4,4 @@ secrets.toml
 *.pyc
 __pycache__/
 *.sqlite
+*.ipynb
