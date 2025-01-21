@@ -293,6 +293,12 @@ tru_rag = TruCustomApp(
     feedbacks=feedbacks,
 )
 
+import time
+def mystream(text):
+    for word in text.split(" "):
+        yield word + " "
+        time.sleep(0.02)
+
 def main():
     """Main Streamlit application function."""
 
@@ -333,7 +339,7 @@ def main():
         category_message = f"I see you've switched to {current_category}! Let me help you find some delicious {current_category} recipes! 👨‍🍳"
         st.session_state.messages.append({"role": "assistant", "content": category_message})
         with st.chat_message("assistant"):
-            st.markdown(category_message)
+            st.write_stream(stream=mystream(category_message))
 
     st.session_state.previous_category = current_category
 
@@ -356,7 +362,7 @@ def main():
 
         # Display assistant response
         with st.chat_message("assistant"):
-            st.markdown(response)
+            st.write_stream(stream=mystream(response))
         st.session_state.messages.append({"role": "assistant", "content": response})
 
         # Display related documents
