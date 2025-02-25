@@ -1,9 +1,9 @@
 streamlit
 snowflake-snowpark-python
 snowflake.core
-trulens-connectors-snowflake
-trulens-core
-trulens-providers-cortex
-trulens-eval
+trulens-connectors-snowflake==1.4.1
+trulens-core==1.4.1
+trulens-providers-cortex==1.4.1
+trulens-eval==1.4.1
 snowflake-ml-python
 streamlit-lottie
